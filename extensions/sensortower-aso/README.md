@@ -14,6 +14,7 @@ The tool is workflow-first: one call returns the combined app intelligence data 
 - Languages
 
 Values are estimates from Sensor Tower API responses.
+This tool does not provide ASOspy-style daily installs (D/I); use `aso_play_search` for D/I and app age.
 
 ## Enable plugin
 

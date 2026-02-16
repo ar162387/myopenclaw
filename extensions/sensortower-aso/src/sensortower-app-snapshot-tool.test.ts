@@ -448,4 +448,148 @@ describe("sensortower_app_snapshot tool", () => {
     const calledPaths = fetchMock.mock.calls.map((call) => new URL(String(call[0])).pathname);
     expect(calledPaths).not.toContain("/v1/unified/search_entities");
   });
+
+  it("parses compact sales keys (u/c/d) from Sensor Tower responses", async () => {
+    const appId = "com.ubercab.eats";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/android/apps") {
+        return new Response(
+          JSON.stringify([{ app_id: appId, name: "Uber Eats: Food Delivery", release_date: "2017-01-01" }]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.pathname === "/v1/android/sales_report_estimates") {
+        const startDate = url.searchParams.get("start_date");
+        const endDate = url.searchParams.get("end_date");
+        const countries = url.searchParams.get("countries");
+        if (startDate === "2017-01-01" && endDate && countries === "WW") {
+          return new Response(
+            JSON.stringify([{ aid: appId, c: "WW", d: "2026-01-01T00:00:00Z", u: 1_578_502 }]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (startDate === "2026-01-01" && endDate === "2026-01-31" && countries === null) {
+          return new Response(
+            JSON.stringify([
+              { aid: appId, c: "US", d: "2026-01-01T00:00:00Z", u: 1000 },
+              { aid: appId, c: "CA", d: "2026-01-01T00:00:00Z" },
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock as typeof fetch);
+
+    const tool = createSensorTowerAppSnapshotTool(
+      fakeApi({
+        pluginConfig: {
+          authToken: "token",
+          requestsPerMinute: 60,
+        },
+      }),
+    );
+    const res = await tool.execute("id", { app_id: appId, month: "2026-01" });
+    const details = res.details as {
+      metrics: {
+        overall: { downloadsWwEstimate: number | null; revenueWwEstimate: number | null };
+        lastMonth: {
+          downloadsEstimate: number | null;
+          revenueEstimate: number | null;
+          topCountriesByDownloads: Array<{
+            country: string;
+            downloadsEstimate: number | null;
+            revenueEstimate: number | null;
+          }>;
+        };
+      };
+    };
+    expect(details.metrics.overall.downloadsWwEstimate).toBe(1_578_502);
+    expect(details.metrics.overall.revenueWwEstimate).toBeNull();
+    expect(details.metrics.lastMonth.downloadsEstimate).toBe(1000);
+    expect(details.metrics.lastMonth.revenueEstimate).toBeNull();
+    expect(details.metrics.lastMonth.topCountriesByDownloads).toEqual([
+      {
+        country: "US",
+        downloadsEstimate: 1000,
+        revenueEstimate: null,
+      },
+    ]);
+  });
+
+  it("keeps metrics null (not zero) when sales rows omit numeric fields", async () => {
+    const appId = "com.tejuri.app.walif";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v1/android/apps") {
+        return new Response(
+          JSON.stringify([
+            {
+              app_id: appId,
+              name: "HiDubai: Find Dubai Companies",
+              release_date: "2018-01-01",
+              countries: ["AE", "PK"],
+            },
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.pathname === "/v1/android/sales_report_estimates") {
+        const startDate = url.searchParams.get("start_date");
+        const endDate = url.searchParams.get("end_date");
+        const countries = url.searchParams.get("countries");
+        if (startDate === "2018-01-01" && endDate && countries === "WW") {
+          return new Response(
+            JSON.stringify([{ aid: appId, c: "WW", d: "2026-01-01T00:00:00Z" }]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (startDate === "2026-01-01" && endDate === "2026-01-31" && countries === null) {
+          return new Response(
+            JSON.stringify([
+              { aid: appId, c: "AE", d: "2026-01-01T00:00:00Z" },
+              { aid: appId, c: "PK", d: "2026-01-01T00:00:00Z" },
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock as typeof fetch);
+
+    const tool = createSensorTowerAppSnapshotTool(
+      fakeApi({
+        pluginConfig: {
+          authToken: "token",
+          requestsPerMinute: 60,
+        },
+      }),
+    );
+    const res = await tool.execute("id", { app_id: appId, month: "2026-01" });
+    const details = res.details as {
+      metrics: {
+        overall: { downloadsWwEstimate: number | null; revenueWwEstimate: number | null };
+        lastMonth: {
+          downloadsEstimate: number | null;
+          revenueEstimate: number | null;
+          topCountriesByDownloads: Array<{
+            country: string;
+            downloadsEstimate: number | null;
+            revenueEstimate: number | null;
+          }>;
+        };
+      };
+    };
+    expect(details.metrics.overall.downloadsWwEstimate).toBeNull();
+    expect(details.metrics.overall.revenueWwEstimate).toBeNull();
+    expect(details.metrics.lastMonth.downloadsEstimate).toBeNull();
+    expect(details.metrics.lastMonth.revenueEstimate).toBeNull();
+    expect(details.metrics.lastMonth.topCountriesByDownloads).toEqual([
+      { country: "AE", downloadsEstimate: null, revenueEstimate: null },
+      { country: "PK", downloadsEstimate: null, revenueEstimate: null },
+    ]);
+  });
 });

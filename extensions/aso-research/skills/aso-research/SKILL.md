@@ -67,6 +67,9 @@ Use this skill when the user asks for:
   - Recommended short description + alternatives.
   - Recommended long description.
 - Confidence notes: missing/failed tool calls and any gaps.
+- Metric attribution:
+  - Daily installs (D/I) are from `aso_play_search` (ASOspy overlay).
+  - Sensor Tower provides aggregate estimates (overall/last month downloads, revenue, RDP, top countries) plus metadata.
 
 ## Tool behavior rules
 
@@ -76,6 +79,7 @@ Use this skill when the user asks for:
 - If any tool fails, continue with available data and explicitly report the limitation.
 - Do not invent market data when tool responses are missing.
 - Final ASO output must include the exact keyword searches used and the selected competitor list.
+- Do not state that Sensor Tower provides daily installs; use ASOspy D/I for that field.
 
 ## Tool references
 

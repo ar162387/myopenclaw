@@ -307,10 +307,12 @@ function extractLanguages(details: JsonRecord | null): string[] {
 
 function parseSalesRows(rows: JsonRecord[]): SalesRow[] {
   return rows.map((row) => ({
-    date: readString(row, ["date", "month", "period"]),
-    country: readString(row, ["country", "country_code"]),
-    downloads: readNumber(row, ["unified_units", "units", "downloads"]),
-    revenue: readNumber(row, ["unified_revenue", "revenue"]),
+    // Sensor Tower may return either verbose keys (country, unified_units, ...)
+    // or compact keys (c, u, r, d) depending on endpoint/account.
+    date: readString(row, ["date", "month", "period", "d"]),
+    country: readString(row, ["country", "country_code", "c"]),
+    downloads: readNumber(row, ["unified_units", "units", "downloads", "u"]),
+    revenue: readNumber(row, ["unified_revenue", "revenue", "r"]),
   }));
 }
 
@@ -322,27 +324,51 @@ function isAggregateCountry(country: string | undefined): boolean {
   return normalized === "WW" || normalized === "WORLDWIDE" || normalized === "ALL";
 }
 
-function sumNumbers(values: Array<number | undefined>): number {
-  return values.reduce((acc, value) => acc + (typeof value === "number" ? value : 0), 0);
+function sumNumbersOrNull(values: Array<number | undefined>): number | null {
+  let total = 0;
+  let hasNumeric = false;
+  for (const value of values) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      continue;
+    }
+    total += value;
+    hasNumeric = true;
+  }
+  return hasNumeric ? total : null;
 }
 
 function buildTopCountries(rows: SalesRow[], limit: number): TopCountry[] {
-  const byCountry = new Map<string, { downloads: number; revenue: number }>();
+  const byCountry = new Map<
+    string,
+    { downloads: number; revenue: number; hasDownloads: boolean; hasRevenue: boolean }
+  >();
   for (const row of rows) {
     const country = row.country?.trim().toUpperCase();
     if (!country || isAggregateCountry(country)) {
       continue;
     }
-    const next = byCountry.get(country) ?? { downloads: 0, revenue: 0 };
-    next.downloads += row.downloads ?? 0;
-    next.revenue += row.revenue ?? 0;
+    const next = byCountry.get(country) ?? {
+      downloads: 0,
+      revenue: 0,
+      hasDownloads: false,
+      hasRevenue: false,
+    };
+    if (typeof row.downloads === "number" && Number.isFinite(row.downloads)) {
+      next.downloads += row.downloads;
+      next.hasDownloads = true;
+    }
+    if (typeof row.revenue === "number" && Number.isFinite(row.revenue)) {
+      next.revenue += row.revenue;
+      next.hasRevenue = true;
+    }
     byCountry.set(country, next);
   }
   return Array.from(byCountry.entries())
+    .filter(([, metrics]) => metrics.hasDownloads)
     .map(([country, metrics]) => ({
       country,
       downloadsEstimate: metrics.downloads,
-      revenueEstimate: metrics.revenue,
+      revenueEstimate: metrics.hasRevenue ? metrics.revenue : null,
     }))
     .sort((a, b) => (b.downloadsEstimate ?? 0) - (a.downloadsEstimate ?? 0))
     .slice(0, limit);
@@ -405,8 +431,8 @@ function resolveLastMonthMetrics(rows: SalesRow[]): {
   const nonAggregates = rows.filter((row) => !isAggregateCountry(row.country));
   if (nonAggregates.length > 0) {
     return {
-      downloadsEstimate: sumNumbers(nonAggregates.map((row) => row.downloads)),
-      revenueEstimate: sumNumbers(nonAggregates.map((row) => row.revenue)),
+      downloadsEstimate: sumNumbersOrNull(nonAggregates.map((row) => row.downloads)),
+      revenueEstimate: sumNumbersOrNull(nonAggregates.map((row) => row.revenue)),
       rowsForTopCountries: nonAggregates,
     };
   }
@@ -418,8 +444,8 @@ function resolveLastMonthMetrics(rows: SalesRow[]): {
     };
   }
   return {
-    downloadsEstimate: sumNumbers(rows.map((row) => row.downloads)),
-    revenueEstimate: sumNumbers(rows.map((row) => row.revenue)),
+    downloadsEstimate: sumNumbersOrNull(rows.map((row) => row.downloads)),
+    revenueEstimate: sumNumbersOrNull(rows.map((row) => row.revenue)),
     rowsForTopCountries: [],
   };
 }
@@ -771,9 +797,14 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
         const allTimeSales = parseSalesRows(allTimeSalesRaw);
         const monthSales = parseSalesRows(monthSalesRaw);
 
-        const overallRevenue = sumNumbers(allTimeSales.map((row) => row.revenue));
-        const overallDownloads = sumNumbers(allTimeSales.map((row) => row.downloads));
-        const overallRdp = overallDownloads > 0 ? overallRevenue / overallDownloads : null;
+        const overallRevenue = sumNumbersOrNull(allTimeSales.map((row) => row.revenue));
+        const overallDownloads = sumNumbersOrNull(allTimeSales.map((row) => row.downloads));
+        const overallRdp =
+          typeof overallRevenue === "number" &&
+          typeof overallDownloads === "number" &&
+          overallDownloads > 0
+            ? overallRevenue / overallDownloads
+            : null;
 
         const monthMetrics = resolveLastMonthMetrics(monthSales);
         const salesTopCountries = buildTopCountries(
@@ -804,8 +835,8 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
           },
           metrics: {
             overall: {
-              revenueWwEstimate: Number.isFinite(overallRevenue) ? overallRevenue : null,
-              downloadsWwEstimate: Number.isFinite(overallDownloads) ? overallDownloads : null,
+              revenueWwEstimate: overallRevenue,
+              downloadsWwEstimate: overallDownloads,
               rdpWwEstimate: overallRdp,
             },
             lastMonth: {

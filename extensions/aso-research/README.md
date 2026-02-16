@@ -130,6 +130,7 @@ The tool returns a markdown table with:
 - age
 
 Use package id for exact Sensor Tower lookup (`sensortower_app_snapshot` with `app_id`).
+For metric attribution: daily installs come from ASOspy (`aso_play_search`), while Sensor Tower provides aggregate download/revenue estimates and metadata.
 
 ## How it works
 
