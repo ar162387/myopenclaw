@@ -28,6 +28,7 @@ describe("config discord", () => {
                 dm: {
                   enabled: true,
                   allowFrom: ["steipete"],
+                  nativeToolResults: true,
                   groupEnabled: true,
                   groupChannels: ["openclaw-dm"],
                 },
@@ -60,6 +61,7 @@ describe("config discord", () => {
       const cfg = loadConfig();
 
       expect(cfg.channels?.discord?.enabled).toBe(true);
+      expect(cfg.channels?.discord?.dm?.nativeToolResults).toBe(true);
       expect(cfg.channels?.discord?.dm?.groupEnabled).toBe(true);
       expect(cfg.channels?.discord?.dm?.groupChannels).toEqual(["openclaw-dm"]);
       expect(cfg.channels?.discord?.actions?.emojiUploads).toBe(true);

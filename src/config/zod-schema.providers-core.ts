@@ -208,6 +208,7 @@ export const DiscordDmSchema = z
     enabled: z.boolean().optional(),
     policy: DmPolicySchema.optional().default("pairing"),
     allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+    nativeToolResults: z.boolean().optional(),
     groupEnabled: z.boolean().optional(),
     groupChannels: z.array(z.union([z.string(), z.number()])).optional(),
   })

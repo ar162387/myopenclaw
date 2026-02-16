@@ -32,6 +32,7 @@ import {
 } from "../../auto-reply/commands-registry.js";
 import { finalizeInboundContext } from "../../auto-reply/reply/inbound-context.js";
 import { dispatchReplyWithDispatcher } from "../../auto-reply/reply/provider-dispatcher.js";
+import type { ReplyDispatchKind } from "../../auto-reply/reply/reply-dispatcher.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
 import { buildPairingReply } from "../../pairing/pairing-messages.js";
 import {
@@ -39,8 +40,11 @@ import {
   upsertChannelPairingRequest,
 } from "../../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../../routing/resolve-route.js";
+import { resolveMarkdownTableMode } from "../../config/markdown-tables.js";
+import type { MarkdownTableMode } from "../../config/types.base.js";
 import { loadWebMedia } from "../../web/media.js";
 import { chunkDiscordTextWithMode } from "../chunk.js";
+import { formatDiscordReplyText } from "../reply-format.js";
 import {
   allowListMatches,
   isDiscordGroupAllowedByPolicy,
@@ -782,13 +786,20 @@ async function dispatchDiscordCommandInteraction(params: {
   });
 
   let didReply = false;
+  const tableMode = resolveMarkdownTableMode({
+    cfg,
+    channel: "discord",
+    accountId,
+  });
   await dispatchReplyWithDispatcher({
     ctx: ctxPayload,
     cfg,
+    allowNativeToolResults:
+      isDirectMessage && discordConfig?.dm?.nativeToolResults === true ? true : undefined,
     dispatcherOptions: {
       responsePrefix: resolveEffectiveMessagesConfig(cfg, route.agentId).responsePrefix,
       humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
-      deliver: async (payload) => {
+      deliver: async (payload, info) => {
         try {
           await deliverDiscordInteractionReply({
             interaction,
@@ -799,6 +810,8 @@ async function dispatchDiscordCommandInteraction(params: {
             maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
             preferFollowUp: preferFollowUp || didReply,
             chunkMode: resolveChunkMode(cfg, "discord", accountId),
+            dispatchKind: info.kind,
+            tableMode,
           });
         } catch (error) {
           if (isDiscordUnknownInteraction(error)) {
@@ -830,10 +843,25 @@ async function deliverDiscordInteractionReply(params: {
   maxLinesPerMessage?: number;
   preferFollowUp: boolean;
   chunkMode: "length" | "newline";
+  dispatchKind?: ReplyDispatchKind;
+  tableMode?: MarkdownTableMode;
 }) {
-  const { interaction, payload, textLimit, maxLinesPerMessage, preferFollowUp, chunkMode } = params;
+  const {
+    interaction,
+    payload,
+    textLimit,
+    maxLinesPerMessage,
+    preferFollowUp,
+    chunkMode,
+    dispatchKind,
+    tableMode,
+  } = params;
   const mediaList = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-  const text = payload.text ?? "";
+  const text = formatDiscordReplyText({
+    text: payload.text ?? "",
+    kind: dispatchKind,
+    tableMode,
+  });
 
   let hasReplied = false;
   const sendMessage = async (content: string, files?: { name: string; data: Buffer }[]) => {

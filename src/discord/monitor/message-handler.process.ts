@@ -338,7 +338,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     responsePrefix: prefixContext.responsePrefix,
     responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
     humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
-    deliver: async (payload: ReplyPayload) => {
+    deliver: async (payload: ReplyPayload, info) => {
       const replyToId = replyReference.use();
       await deliverDiscordReply({
         replies: [payload],
@@ -352,6 +352,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
         maxLinesPerMessage: discordConfig?.maxLinesPerMessage,
         tableMode,
         chunkMode: resolveChunkMode(cfg, "discord", accountId),
+        dispatchKind: info.kind,
       });
       replyReference.markSent();
     },

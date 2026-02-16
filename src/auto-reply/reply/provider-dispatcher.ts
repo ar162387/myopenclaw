@@ -16,12 +16,14 @@ export async function dispatchReplyWithBufferedBlockDispatcher(params: {
   cfg: OpenClawConfig;
   dispatcherOptions: ReplyDispatcherWithTypingOptions;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
+  allowNativeToolResults?: boolean;
   replyResolver?: typeof import("../reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
   return await dispatchInboundMessageWithBufferedDispatcher({
     ctx: params.ctx,
     cfg: params.cfg,
     dispatcherOptions: params.dispatcherOptions,
+    allowNativeToolResults: params.allowNativeToolResults,
     replyResolver: params.replyResolver,
     replyOptions: params.replyOptions,
   });
@@ -32,12 +34,14 @@ export async function dispatchReplyWithDispatcher(params: {
   cfg: OpenClawConfig;
   dispatcherOptions: ReplyDispatcherOptions;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
+  allowNativeToolResults?: boolean;
   replyResolver?: typeof import("../reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
   return await dispatchInboundMessageWithDispatcher({
     ctx: params.ctx,
     cfg: params.cfg,
     dispatcherOptions: params.dispatcherOptions,
+    allowNativeToolResults: params.allowNativeToolResults,
     replyResolver: params.replyResolver,
     replyOptions: params.replyOptions,
   });

@@ -220,7 +220,7 @@ describe("subscribeEmbeddedPiSession", () => {
     expect(onToolResult).toHaveBeenCalledTimes(2);
     const output = onToolResult.mock.calls[1][0];
     expect(output.text).toContain("hello");
-    expect(output.text).toContain("```txt");
+    expect(output.text).not.toContain("```txt");
 
     handler?.({
       type: "tool_execution_end",

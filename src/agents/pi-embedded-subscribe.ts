@@ -20,6 +20,7 @@ import { formatReasoningMessage } from "./pi-embedded-utils.js";
 const THINKING_TAG_SCAN_RE = /<\s*(\/?)\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
 const FINAL_TAG_SCAN_RE = /<\s*(\/?)\s*final\s*>/gi;
 const log = createSubsystemLogger("agent/embedded");
+const MAX_TOOL_OUTPUT_JSON_PRETTY_CHARS = 120_000;
 
 export type {
   BlockReplyChunking,
@@ -234,15 +235,41 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     typeof params.shouldEmitToolOutput === "function"
       ? params.shouldEmitToolOutput()
       : params.verboseLevel === "full";
+  const maybeFormatToolOutputJson = (text: string): string | null => {
+    if (!useMarkdown) {
+      return null;
+    }
+    if (text.startsWith("```")) {
+      return null;
+    }
+    if (!text.startsWith("{") && !text.startsWith("[")) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+      const pretty = JSON.stringify(parsed, null, 2);
+      if (!pretty || pretty.length > MAX_TOOL_OUTPUT_JSON_PRETTY_CHARS) {
+        return null;
+      }
+      return `\`\`\`json\n${pretty}\n\`\`\``;
+    } catch {
+      return null;
+    }
+  };
   const formatToolOutputBlock = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) {
       return "(no output)";
     }
-    if (!useMarkdown) {
-      return trimmed;
+    const prettyJson = maybeFormatToolOutputJson(trimmed);
+    if (prettyJson) {
+      return prettyJson;
     }
-    return `\`\`\`txt\n${trimmed}\n\`\`\``;
+    // Keep markdown renderable in chat surfaces by default (tables, links, emphasis).
+    return trimmed;
   };
   const emitToolSummary = (toolName?: string, meta?: string) => {
     if (!params.onToolResult) {

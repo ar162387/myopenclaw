@@ -93,8 +93,71 @@ describe("discord native commands", () => {
     });
 
     expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(dispatchMock.mock.calls[0]?.[0]?.allowNativeToolResults).toBeUndefined();
     expect(reply).toHaveBeenCalledTimes(1);
     expect(followUp).toHaveBeenCalledTimes(0);
     expect(reply.mock.calls[0]?.[0]?.content).toContain("final");
+  });
+
+  it("emits tool results for native slash commands when enabled in DM config", async () => {
+    const { ChannelType } = await import("@buape/carbon");
+    const { createDiscordNativeCommand } = await import("./monitor.js");
+
+    dispatchMock.mockImplementationOnce(async (params) => {
+      expect(params.allowNativeToolResults).toBe(true);
+      if ("dispatcherOptions" in params && params.dispatcherOptions) {
+        const { dispatcher, markDispatchIdle } = createReplyDispatcherWithTyping(params.dispatcherOptions);
+        dispatcher.sendToolResult({ text: "tool output" });
+        dispatcher.sendFinalReply({ text: "final reply" });
+        await dispatcher.waitForIdle();
+        markDispatchIdle();
+        return { queuedFinal: true, counts: dispatcher.getQueuedCounts() };
+      }
+      return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
+    });
+
+    const cfg = {
+      agents: {
+        defaults: {
+          model: "anthropic/claude-opus-4-5",
+          humanDelay: { mode: "off" },
+          workspace: "/tmp/openclaw",
+        },
+      },
+      session: { store: "/tmp/openclaw-sessions.json" },
+      discord: { dm: { enabled: true, policy: "open", nativeToolResults: true } },
+    } as ReturnType<typeof import("../config/config.js").loadConfig>;
+
+    const command = createDiscordNativeCommand({
+      command: {
+        name: "verbose",
+        description: "Toggle verbose mode.",
+        acceptsArgs: true,
+      },
+      cfg,
+      discordConfig: cfg.discord,
+      accountId: "default",
+      sessionPrefix: "discord:slash",
+      ephemeralDefault: true,
+    });
+
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const followUp = vi.fn().mockResolvedValue(undefined);
+
+    await command.run({
+      user: { id: "u1", username: "Ada", globalName: "Ada" },
+      channel: { type: ChannelType.DM },
+      guild: null,
+      rawData: { id: "i1" },
+      options: { getString: vi.fn().mockReturnValue("full") },
+      reply,
+      followUp,
+    });
+
+    expect(dispatchMock).toHaveBeenCalledTimes(1);
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply.mock.calls[0]?.[0]?.content).toContain("tool output");
+    expect(followUp).toHaveBeenCalledTimes(1);
+    expect(followUp.mock.calls[0]?.[0]?.content).toContain("final reply");
   });
 });

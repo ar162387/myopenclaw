@@ -19,6 +19,7 @@ export async function dispatchInboundMessage(params: {
   cfg: OpenClawConfig;
   dispatcher: ReplyDispatcher;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
+  allowNativeToolResults?: boolean;
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
   const finalized = finalizeInboundContext(params.ctx);
@@ -27,6 +28,7 @@ export async function dispatchInboundMessage(params: {
     cfg: params.cfg,
     dispatcher: params.dispatcher,
     replyOptions: params.replyOptions,
+    allowNativeToolResults: params.allowNativeToolResults,
     replyResolver: params.replyResolver,
   });
 }
@@ -36,6 +38,7 @@ export async function dispatchInboundMessageWithBufferedDispatcher(params: {
   cfg: OpenClawConfig;
   dispatcherOptions: ReplyDispatcherWithTypingOptions;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
+  allowNativeToolResults?: boolean;
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
   const { dispatcher, replyOptions, markDispatchIdle } = createReplyDispatcherWithTyping(
@@ -46,6 +49,7 @@ export async function dispatchInboundMessageWithBufferedDispatcher(params: {
     ctx: params.ctx,
     cfg: params.cfg,
     dispatcher,
+    allowNativeToolResults: params.allowNativeToolResults,
     replyResolver: params.replyResolver,
     replyOptions: {
       ...params.replyOptions,
@@ -62,6 +66,7 @@ export async function dispatchInboundMessageWithDispatcher(params: {
   cfg: OpenClawConfig;
   dispatcherOptions: ReplyDispatcherOptions;
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
+  allowNativeToolResults?: boolean;
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
   const dispatcher = createReplyDispatcher(params.dispatcherOptions);
@@ -69,6 +74,7 @@ export async function dispatchInboundMessageWithDispatcher(params: {
     ctx: params.ctx,
     cfg: params.cfg,
     dispatcher,
+    allowNativeToolResults: params.allowNativeToolResults,
     replyResolver: params.replyResolver,
     replyOptions: params.replyOptions,
   });

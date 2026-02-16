@@ -343,6 +343,7 @@ const FIELD_LABELS: Record<string, string> = {
   "channels.imessage.dmPolicy": "iMessage DM Policy",
   "channels.bluebubbles.dmPolicy": "BlueBubbles DM Policy",
   "channels.discord.dm.policy": "Discord DM Policy",
+  "channels.discord.dm.nativeToolResults": "Discord DM Native Tool Results",
   "channels.discord.retry.attempts": "Discord Retry Attempts",
   "channels.discord.retry.minDelayMs": "Discord Retry Min Delay (ms)",
   "channels.discord.retry.maxDelayMs": "Discord Retry Max Delay (ms)",
@@ -724,6 +725,8 @@ const FIELD_HELP: Record<string, string> = {
     'Direct message access control ("pairing" recommended). "open" requires channels.bluebubbles.allowFrom=["*"].',
   "channels.discord.dm.policy":
     'Direct message access control ("pairing" recommended). "open" requires channels.discord.dm.allowFrom=["*"].',
+  "channels.discord.dm.nativeToolResults":
+    "Allow native Discord slash commands in DMs to emit tool result bubbles (default: false).",
   "channels.discord.retry.attempts":
     "Max retry attempts for outbound Discord API calls (default: 3).",
   "channels.discord.retry.minDelayMs": "Minimum retry delay in ms for Discord outbound calls.",

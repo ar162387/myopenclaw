@@ -18,6 +18,8 @@ export type DiscordDmConfig = {
   policy?: DmPolicy;
   /** Allowlist for DM senders (ids or names). */
   allowFrom?: Array<string | number>;
+  /** When true, native slash commands in DMs may emit tool result bubbles. Default: false. */
+  nativeToolResults?: boolean;
   /** If true, allow group DMs (default: false). */
   groupEnabled?: boolean;
   /** Optional allowlist for group DM channels (ids or slugs). */
