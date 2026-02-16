@@ -28,7 +28,7 @@ jobs:
           exit 1
 
       - name: Install pnpm deps (minimal)
-        run: pnpm install --ignore-scripts --frozen-lockfile
+        run: pnpm install --ignore-scripts --no-frozen-lockfile
 
       - name: Run installer docker tests
         env:
