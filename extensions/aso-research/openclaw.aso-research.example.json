@@ -1,0 +1,16 @@
+{
+  "plugins": {
+    "entries": {
+      "aso-research": {
+        "enabled": true,
+        "config": {
+          "asospyExtensionPath": "/path/to/unpacked-asospy",
+          "chromiumExecutablePath": "/path/to/chromium"
+        }
+      }
+    }
+  },
+  "tools": {
+    "allow": ["aso_play_search"]
+  }
+}

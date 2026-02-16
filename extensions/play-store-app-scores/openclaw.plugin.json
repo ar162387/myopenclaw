@@ -1,0 +1,20 @@
+{
+  "id": "play-store-app-scores",
+  "name": "Play Store App Scores",
+  "description": "Search Google Play by keyword, compute X score (installs + age), return ranked table.",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "defaultCountry": {
+        "type": "string",
+        "description": "Default country code for Play Store (e.g. us)."
+      },
+      "defaultLimit": {
+        "type": "number",
+        "description": "Default max number of apps to fetch (e.g. 20)."
+      }
+    }
+  }
+}

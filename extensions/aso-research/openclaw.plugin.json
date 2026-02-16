@@ -1,0 +1,37 @@
+{
+  "id": "aso-research",
+  "name": "ASO Research",
+  "description": "Play Store keyword search with ASOspy overlay: daily installs and app age from work search page.",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [],
+    "properties": {
+      "asospyExtensionPath": {
+        "type": "string",
+        "description": "Path to unpacked ASOspy extension for --load-extension."
+      },
+      "chromiumExecutablePath": {
+        "type": "string",
+        "description": "Optional Chromium executable path for extension mode (if Playwright chromium is not installed)."
+      },
+      "headless": {
+        "type": "boolean",
+        "description": "Run Chromium headless (default true). Chrome 128+ new headless supports extensions."
+      },
+      "playStoreLocale": {
+        "type": "string",
+        "description": "Default hl for Play Store (e.g. en)."
+      },
+      "overlayTimeoutMs": {
+        "type": "number",
+        "description": "Wait timeout for ASOspy overlay in ms (e.g. 20000)."
+      },
+      "useWorkSearch": {
+        "type": "boolean",
+        "description": "Try work search first (default true). If injection fails, falls back to store search."
+      }
+    }
+  }
+}

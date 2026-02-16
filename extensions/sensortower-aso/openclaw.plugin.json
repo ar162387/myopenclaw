@@ -1,0 +1,118 @@
+{
+  "id": "sensortower-aso",
+  "name": "Sensor Tower",
+  "description": "Sensor Tower app snapshot tool for app intelligence workflows.",
+  "uiHints": {
+    "authToken": {
+      "label": "Sensor Tower Auth Token",
+      "sensitive": true,
+      "placeholder": "st_...",
+      "help": "API auth token (or set SENSORTOWER_AUTH_TOKEN)."
+    },
+    "baseUrl": {
+      "label": "Sensor Tower Base URL",
+      "placeholder": "https://api.sensortower.com"
+    },
+    "authMode": {
+      "label": "Auth Mode",
+      "help": "How auth is attached to requests: bearer header, query, or both. Sensor Tower commonly expects query."
+    },
+    "requestsPerMinute": {
+      "label": "Max Requests Per Minute",
+      "help": "Set to 6 to match Sensor Tower limits."
+    },
+    "timeoutMs": {
+      "label": "Request Timeout (ms)"
+    },
+    "defaultMetadataOs": {
+      "label": "Default Metadata OS"
+    },
+    "defaultCountry": {
+      "label": "Default Country",
+      "placeholder": "WW"
+    },
+    "defaultTopCountriesLimit": {
+      "label": "Top Countries Limit"
+    },
+    "allTimeFallbackStartDate": {
+      "label": "All-Time Fallback Start Date",
+      "placeholder": "2014-01-01",
+      "advanced": true
+    },
+    "endpoints.searchEntities": {
+      "label": "Search Endpoint",
+      "advanced": true
+    },
+    "endpoints.appDetails": {
+      "label": "App Details Endpoint",
+      "advanced": true
+    },
+    "endpoints.salesReport": {
+      "label": "Sales Endpoint",
+      "advanced": true
+    },
+    "endpoints.unifiedSalesReport": {
+      "label": "Unified Sales Endpoint (legacy)",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string"
+      },
+      "authToken": {
+        "type": "string"
+      },
+      "authMode": {
+        "type": "string",
+        "enum": ["bearer", "query", "both"]
+      },
+      "requestsPerMinute": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 60
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000
+      },
+      "defaultMetadataOs": {
+        "type": "string",
+        "enum": ["unified", "ios", "android"]
+      },
+      "defaultCountry": {
+        "type": "string"
+      },
+      "defaultTopCountriesLimit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25
+      },
+      "allTimeFallbackStartDate": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      },
+      "endpoints": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "searchEntities": {
+            "type": "string"
+          },
+          "appDetails": {
+            "type": "string"
+          },
+          "salesReport": {
+            "type": "string"
+          },
+          "unifiedSalesReport": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

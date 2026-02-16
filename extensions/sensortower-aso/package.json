@@ -1,0 +1,15 @@
+{
+  "name": "@openclaw/sensortower-aso",
+  "version": "2026.2.1",
+  "description": "OpenClaw plugin: Sensor Tower ASO snapshot tool with strict rate limiting.",
+  "type": "module",
+  "devDependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
