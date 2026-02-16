@@ -1,6 +1,6 @@
 ---
 name: aso-research
-description: Use for end-to-end ASO generation and optimization when users provide an app URL or app details. Orchestrate web_fetch, aso_play_search, and sensortower_app_snapshot while keeping tools independently callable.
+description: Use for end-to-end ASO generation and optimization when users provide an app URL or app details. Orchestrate web_fetch, aso_play_search, and Sensor Tower metadata/sales tools while keeping tools independently callable.
 ---
 
 # ASO Research Workflow
@@ -38,11 +38,12 @@ Use this skill when the user asks for:
 - Keep each selected app's package id and Play URL from `aso_play_search` output.
 
 5. Enrich each selected competitor with `sensortower_app_snapshot`.
-- Call `sensortower_app_snapshot` once per selected app.
+- Call `sensortower_app_snapshot` once per selected app for metadata (name/description/language).
 - Prefer exact lookup via `app_id` using package id from `aso_play_search`.
 - Use `app_query` only when package id is unavailable.
-- Collect app name, subtitle/short description, long description, and monthly download context.
-- Do not finalize ASO copy before calling Sensor Tower for each selected competitor unless the tool is unavailable/failing.
+- Collect app name, subtitle/short description, long description, and language context.
+- Do not finalize ASO copy before calling metadata snapshots for each selected competitor unless the tool is unavailable/failing.
+- Only call `sensortower_app_sales_downloads` when the user explicitly asks for sales/revenue/download estimates.
 
 6. Extract keyword patterns.
 - Find recurring high-intent terms across competitor names and descriptions.
@@ -69,7 +70,8 @@ Use this skill when the user asks for:
 - Confidence notes: missing/failed tool calls and any gaps.
 - Metric attribution:
   - Daily installs (D/I) are from `aso_play_search` (ASOspy overlay).
-  - Sensor Tower provides aggregate estimates (overall/last month downloads, revenue, RDP, top countries) plus metadata.
+  - Sensor Tower metadata comes from `sensortower_app_snapshot`.
+  - Sensor Tower aggregate sales/download estimates come from `sensortower_app_sales_downloads`.
 
 ## Tool behavior rules
 
@@ -85,4 +87,5 @@ Use this skill when the user asks for:
 
 - `web_fetch`: fetch and parse app page when URL is available.
 - `aso_play_search`: Play Store keyword search with ASOspy overlay (D/I + age).
-- `sensortower_app_snapshot`: app metadata and estimated performance snapshot per competitor.
+- `sensortower_app_snapshot`: app metadata snapshot per competitor.
+- `sensortower_app_sales_downloads`: aggregate sales/download estimates per app/month.

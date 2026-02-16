@@ -27,7 +27,7 @@ import {
 } from "../commands/onboard-helpers.js";
 import {
   SENSORTOWER_PLUGIN_ID,
-  SENSORTOWER_TOOL_NAME,
+  SENSORTOWER_TOOL_NAMES,
   resolveSensorTowerConfiguredToken,
   resolveSensorTowerEnvToken,
 } from "../commands/sensortower-setup.js";
@@ -462,7 +462,8 @@ export async function finalizeOnboardingWizard(
   const sensorTowerEnabled = nextConfig.plugins?.entries?.[SENSORTOWER_PLUGIN_ID]?.enabled === true;
   const toolsAllow = Array.isArray(nextConfig.tools?.allow) ? nextConfig.tools.allow : [];
   const sensorTowerToolAllowed =
-    toolsAllow.includes(SENSORTOWER_TOOL_NAME) || toolsAllow.includes(SENSORTOWER_PLUGIN_ID);
+    toolsAllow.includes(SENSORTOWER_PLUGIN_ID) ||
+    SENSORTOWER_TOOL_NAMES.some((name) => toolsAllow.includes(name));
   const sensorTowerConfigToken = resolveSensorTowerConfiguredToken(nextConfig);
   const sensorTowerEnvToken = resolveSensorTowerEnvToken(process.env);
   const hasSensorTowerToken = Boolean(sensorTowerConfigToken || sensorTowerEnvToken);
@@ -476,7 +477,7 @@ export async function finalizeOnboardingWizard(
             sensorTowerConfigToken
               ? "Auth token: stored in config (plugins.entries.sensortower-aso.config.authToken)."
               : "Auth token: provided via env var in Gateway environment.",
-            `Tool: ${SENSORTOWER_TOOL_NAME}`,
+            `Tools: ${SENSORTOWER_TOOL_NAMES.join(", ")}`,
             `Adjust anytime: ${formatCliCommand("openclaw configure --section sensortower")}`,
           ].join("\n")
         : [
@@ -496,7 +497,7 @@ export async function finalizeOnboardingWizard(
           "",
           `- Run: ${formatCliCommand("openclaw configure --section sensortower")}`,
           `- This enables plugin: ${SENSORTOWER_PLUGIN_ID}`,
-          `- And tool: ${SENSORTOWER_TOOL_NAME}`,
+          `- And tools: ${SENSORTOWER_TOOL_NAMES.join(", ")}`,
         ].join("\n"),
     "Sensor Tower (optional)",
   );

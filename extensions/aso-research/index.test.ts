@@ -55,8 +55,11 @@ describe("aso-research plugin guardrails", () => {
       "Run aso_play_search for each keyword set (minimum 3 searches).",
     );
     expect(result?.prependContext).toContain("- NEVER use package IDs.");
-    expect(result?.prependContext).toContain("Call sensortower_app_snapshot ONCE per competitor.");
+    expect(result?.prependContext).toContain(
+      "Call sensortower_app_snapshot ONCE per competitor for metadata.",
+    );
     expect(result?.prependContext).toContain("- package id → app_id");
+    expect(result?.prependContext).toContain("sensortower_app_sales_downloads");
   });
 
   it("does not inject guardrails for non-ASO prompts", async () => {

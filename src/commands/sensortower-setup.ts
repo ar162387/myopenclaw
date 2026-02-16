@@ -2,6 +2,8 @@ import type { OpenClawConfig } from "../config/config.js";
 
 export const SENSORTOWER_PLUGIN_ID = "sensortower-aso";
 export const SENSORTOWER_TOOL_NAME = "sensortower_app_snapshot";
+export const SENSORTOWER_SALES_TOOL_NAME = "sensortower_app_sales_downloads";
+export const SENSORTOWER_TOOL_NAMES = [SENSORTOWER_TOOL_NAME, SENSORTOWER_SALES_TOOL_NAME] as const;
 export const SENSORTOWER_DEFAULT_REQUESTS_PER_MINUTE = 6;
 export const SENSORTOWER_DEFAULT_AUTH_MODE = "query";
 
@@ -98,11 +100,12 @@ export function applySensorTowerSetup(params: {
   }
 
   const nextToolsAllow = Array.isArray(cfg.tools?.allow) ? [...cfg.tools.allow] : [];
-  if (
-    !nextToolsAllow.includes(SENSORTOWER_TOOL_NAME) &&
-    !hasToolAllowEntry(cfg, SENSORTOWER_PLUGIN_ID)
-  ) {
-    nextToolsAllow.push(SENSORTOWER_TOOL_NAME);
+  if (!hasToolAllowEntry(cfg, SENSORTOWER_PLUGIN_ID)) {
+    for (const toolName of SENSORTOWER_TOOL_NAMES) {
+      if (!nextToolsAllow.includes(toolName)) {
+        nextToolsAllow.push(toolName);
+      }
+    }
   }
 
   return {
@@ -110,7 +113,7 @@ export function applySensorTowerSetup(params: {
     plugins: {
       ...cfg.plugins,
       entries: {
-        ...(cfg.plugins?.entries ?? {}),
+        ...cfg.plugins?.entries,
         [SENSORTOWER_PLUGIN_ID]: {
           ...existingEntry,
           enabled: true,
@@ -135,18 +138,20 @@ export async function promptSensorTowerSetup(params: {
   const envToken = resolveSensorTowerEnvToken(process.env);
   const existingEnabled = cfg.plugins?.entries?.[SENSORTOWER_PLUGIN_ID]?.enabled === true;
   const existingToolAllowed =
-    hasToolAllowEntry(cfg, SENSORTOWER_TOOL_NAME) || hasToolAllowEntry(cfg, SENSORTOWER_PLUGIN_ID);
+    hasToolAllowEntry(cfg, SENSORTOWER_PLUGIN_ID) ||
+    SENSORTOWER_TOOL_NAMES.some((name) => hasToolAllowEntry(cfg, name));
 
   await io.note(
     [
-      "Sensor Tower integration adds the `sensortower_app_snapshot` tool for app intelligence workflows.",
-      "It can return overall revenue/RDP, last-month downloads, metadata text, top countries, and languages.",
+      "Sensor Tower integration adds two tools for app intelligence workflows.",
+      "- `sensortower_app_snapshot`: metadata (name/short/long description/languages)",
+      "- `sensortower_app_sales_downloads`: sales/download estimates",
     ].join("\n"),
     "Sensor Tower (optional)",
   );
 
   const wantsSetup = await io.confirm({
-    message: "Enable Sensor Tower tool now?",
+    message: "Enable Sensor Tower tools now?",
     initialValue:
       params.initialEnable ?? (existingEnabled || existingToolAllowed || Boolean(existingToken)),
   });
@@ -180,7 +185,7 @@ export async function promptSensorTowerSetup(params: {
   await io.note(
     [
       "Sensor Tower plugin enabled.",
-      `Tool allowlist includes: ${SENSORTOWER_TOOL_NAME}`,
+      `Tool allowlist includes: ${SENSORTOWER_TOOL_NAMES.join(", ")}`,
       `Rate limit set to ${SENSORTOWER_DEFAULT_REQUESTS_PER_MINUTE} requests/minute.`,
       `Auth mode defaults to ${SENSORTOWER_DEFAULT_AUTH_MODE} (query token).`,
     ].join("\n"),

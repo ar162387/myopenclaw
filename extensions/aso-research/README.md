@@ -129,8 +129,8 @@ The tool returns a markdown table with:
 - daily installs (D/I)
 - age
 
-Use package id for exact Sensor Tower lookup (`sensortower_app_snapshot` with `app_id`).
-For metric attribution: daily installs come from ASOspy (`aso_play_search`), while Sensor Tower provides aggregate download/revenue estimates and metadata.
+Use package id for exact Sensor Tower lookup (`sensortower_app_snapshot` with `app_id` for metadata, `sensortower_app_sales_downloads` with `app_id` for sales/download estimates).
+For metric attribution: daily installs come from ASOspy (`aso_play_search`), Sensor Tower metadata comes from `sensortower_app_snapshot`, and Sensor Tower aggregate download/revenue estimates come from `sensortower_app_sales_downloads`.
 
 ## How it works
 
@@ -147,7 +147,7 @@ Overlay selectors are best-effort; if ASOspy changes its UI, selectors may need 
 The plugin ships a skill that supports two modes:
 
 - Single-tool mode: use `aso_play_search` directly for keyword + D/I + age snapshots.
-- Workflow mode (default for ASO copy generation): orchestrate `web_fetch` (if URL provided), iterative `aso_play_search` competitor discovery, and per-competitor `sensortower_app_snapshot`, then generate optimized app name + short/long descriptions.
+- Workflow mode (default for ASO copy generation): orchestrate `web_fetch` (if URL provided), iterative `aso_play_search` competitor discovery, and per-competitor `sensortower_app_snapshot` metadata calls, then generate optimized app name + short/long descriptions.
 
 This keeps tool access independent while giving a stable end-to-end ASO flow without repeating long prompts.
 
@@ -155,4 +155,4 @@ The plugin also injects ASO workflow guardrails for ASO-style prompts via `befor
 
 - avoid package-id keywords (`com.foo.bar`) for Play search
 - run multiple keyword searches
-- run Sensor Tower per selected competitor before finalizing ASO copy
+- run Sensor Tower metadata (`sensortower_app_snapshot`) per selected competitor before finalizing ASO copy

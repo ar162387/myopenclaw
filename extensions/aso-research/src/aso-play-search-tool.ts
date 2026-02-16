@@ -133,7 +133,7 @@ export function createAsoPlaySearchTool(api: OpenClawPluginApi) {
         const table = `${header}\n${sep}\n${body}`;
         const intro =
           `ASO Play search for **${escapeCell(keyword)}** (locale: ${hl}).\n` +
-          "Use `package id` as `sensortower_app_snapshot.app_id` when available.\n\n";
+          "Use `package id` as `sensortower_app_snapshot.app_id` (metadata) and `sensortower_app_sales_downloads.app_id` (sales/downloads) when available.\n\n";
         return {
           content: [{ type: "text" as const, text: intro + table }],
         };

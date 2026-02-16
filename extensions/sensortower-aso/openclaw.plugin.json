@@ -1,7 +1,7 @@
 {
   "id": "sensortower-aso",
   "name": "Sensor Tower",
-  "description": "Sensor Tower app snapshot tool for app intelligence workflows.",
+  "description": "Sensor Tower metadata and sales/download tools for app intelligence workflows.",
   "uiHints": {
     "authToken": {
       "label": "Sensor Tower Auth Token",

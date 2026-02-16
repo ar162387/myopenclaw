@@ -1,20 +1,15 @@
 # Sensor Tower
 
-OpenClaw plugin that adds one optional tool: `sensortower_app_snapshot`.
+OpenClaw plugin that adds two optional tools:
 
-The tool is workflow-first: one call returns the combined app intelligence data you requested.
+- `sensortower_app_snapshot` (metadata only)
+- `sensortower_app_sales_downloads` (sales/download estimates only)
 
-- Overall revenue estimate (WW)
-- Overall downloads estimate (WW)
-- Overall RDP estimate (computed as revenue/downloads)
-- Last-month downloads estimate
-- Subtitle/short description
-- Long description
-- Top countries (by last-month downloads when available)
-- Languages
+`sensortower_app_snapshot` returns metadata fields (name, subtitle/short description, long description, languages).
+`sensortower_app_sales_downloads` returns monthly worldwide and by-country estimates for downloads/revenue.
 
 Values are estimates from Sensor Tower API responses.
-This tool does not provide ASOspy-style daily installs (D/I); use `aso_play_search` for D/I and app age.
+Neither tool provides ASOspy-style daily installs (D/I); use `aso_play_search` for D/I and app age.
 
 ## Enable plugin
 
@@ -43,20 +38,33 @@ Manual config (equivalent):
     }
   },
   "tools": {
-    "allow": ["sensortower_app_snapshot"]
+    "allow": ["sensortower_app_snapshot", "sensortower_app_sales_downloads"]
   }
 }
 ```
 
 You can also set `SENSORTOWER_AUTH_TOKEN` instead of storing `authToken` in config.
 
-## Tool inputs
+## `sensortower_app_snapshot` inputs
 
 - `unified_app_id` (optional): 24-char unified id.
 - `app_id` (optional): iOS app id (numeric) or Android package id.
 - `app_query` (optional): app search string, used when ids are not provided.
+- `return_candidates` (optional): when `true` with `app_query/query` (and no ids), returns ranked candidate matches only.
+- `candidates_limit` (optional): candidate count in candidate mode (default 5, max 10).
+- `metadata_os` (optional): `unified`, `ios`, or `android` (used for app details lookup).
+
+At least one of `unified_app_id`, `app_id`, or `app_query` is required.
+
+## `sensortower_app_sales_downloads` inputs
+
+- `unified_app_id` (optional): 24-char unified id.
+- `app_id` (optional): iOS app id (numeric) or Android package id.
+- `app_query` (optional): app search string, used when ids are not provided.
+- `return_candidates` (optional): when `true` with `app_query/query` (and no ids), returns ranked candidate matches only.
+- `candidates_limit` (optional): candidate count in candidate mode (default 5, max 10).
 - `month` (optional): `YYYY-MM`, defaults to previous month (UTC).
-- `metadata_os` (optional): `unified`, `ios`, or `android` (used for details and non-unified sales calls).
+- `sales_os` (optional): `unified`, `ios`, or `android`.
 - `top_countries_limit` (optional): max countries to return (default 10).
 
 At least one of `unified_app_id`, `app_id`, or `app_query` is required.

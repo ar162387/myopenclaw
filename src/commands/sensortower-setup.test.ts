@@ -4,7 +4,9 @@ import {
   SENSORTOWER_DEFAULT_AUTH_MODE,
   SENSORTOWER_DEFAULT_REQUESTS_PER_MINUTE,
   SENSORTOWER_PLUGIN_ID,
+  SENSORTOWER_SALES_TOOL_NAME,
   SENSORTOWER_TOOL_NAME,
+  SENSORTOWER_TOOL_NAMES,
   applySensorTowerSetup,
   promptSensorTowerSetup,
   resolveSensorTowerConfiguredToken,
@@ -29,7 +31,7 @@ describe("sensortower setup helpers", () => {
       requestsPerMinute: SENSORTOWER_DEFAULT_REQUESTS_PER_MINUTE,
       authMode: SENSORTOWER_DEFAULT_AUTH_MODE,
     });
-    expect(next.tools?.allow).toEqual(["memory_search", SENSORTOWER_TOOL_NAME]);
+    expect(next.tools?.allow).toEqual(["memory_search", ...SENSORTOWER_TOOL_NAMES]);
   });
 
   it("preserves existing token/rpm when new token is omitted", () => {
@@ -82,6 +84,7 @@ describe("sensortower setup helpers", () => {
     expect(next.plugins?.entries?.[SENSORTOWER_PLUGIN_ID]?.enabled).toBe(true);
     expect(resolveSensorTowerConfiguredToken(next)).toBe("ST0_PROMPT_TOKEN");
     expect(next.tools?.allow).toContain(SENSORTOWER_TOOL_NAME);
+    expect(next.tools?.allow).toContain(SENSORTOWER_SALES_TOOL_NAME);
     expect(note).toHaveBeenCalled();
   });
 

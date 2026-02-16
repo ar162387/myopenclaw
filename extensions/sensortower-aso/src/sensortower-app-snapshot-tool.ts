@@ -26,6 +26,7 @@ type TopCountry = {
 
 const PARAM_WRAPPER_KEYS = ["input", "args", "arguments", "params", "payload", "data"] as const;
 const SEARCH_RESULTS_LIMIT = 10;
+const DEFAULT_CANDIDATES_LIMIT = 5;
 const MIN_QUERY_MATCH_SCORE = 0.55;
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -100,6 +101,47 @@ function readInputNumberParam(params: JsonRecord, keys: string[]): number | unde
         if (Number.isFinite(parsed)) {
           return parsed;
         }
+      }
+    }
+  }
+  return undefined;
+}
+
+function parseBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["false", "0", "no", "n", "off"].includes(normalized)) {
+      return false;
+    }
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 1) {
+      return true;
+    }
+    if (value === 0) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function readInputBooleanParam(params: JsonRecord, keys: string[]): boolean | undefined {
+  const lookup = new Set(keys.map((key) => normalizeParamKey(key)));
+  const records = collectParamRecords(params);
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      if (!lookup.has(normalizeParamKey(key))) {
+        continue;
+      }
+      const parsed = parseBoolean(value);
+      if (typeof parsed === "boolean") {
+        return parsed;
       }
     }
   }
@@ -218,32 +260,6 @@ function resolveMonthWindow(monthInput?: string): {
     startDate: toIsoDateUtc(start),
     endDate: toIsoDateUtc(end),
   };
-}
-
-function parseReleaseDate(details: JsonRecord | null): string | undefined {
-  const asDateString = readString(details, [
-    "release_date",
-    "released",
-    "published_date",
-    "launch_date",
-    "first_seen_at",
-  ]);
-  if (asDateString) {
-    const dateOnly = asDateString.trim().slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-      return dateOnly;
-    }
-    const parsed = Date.parse(asDateString);
-    if (!Number.isNaN(parsed)) {
-      return toIsoDateUtc(new Date(parsed));
-    }
-  }
-  const asEpoch = readNumber(details, ["released_at", "release_timestamp", "first_seen_ts"]);
-  if (typeof asEpoch === "number") {
-    const ms = asEpoch > 10_000_000_000 ? asEpoch : asEpoch * 1000;
-    return toIsoDateUtc(new Date(ms));
-  }
-  return undefined;
 }
 
 function normalizeLanguageList(value: unknown): string[] {
@@ -370,57 +386,8 @@ function buildTopCountries(rows: SalesRow[], limit: number): TopCountry[] {
       downloadsEstimate: metrics.downloads,
       revenueEstimate: metrics.hasRevenue ? metrics.revenue : null,
     }))
-    .sort((a, b) => (b.downloadsEstimate ?? 0) - (a.downloadsEstimate ?? 0))
+    .toSorted((a, b) => (b.downloadsEstimate ?? 0) - (a.downloadsEstimate ?? 0))
     .slice(0, limit);
-}
-
-function extractTopCountriesFromDetails(details: JsonRecord | null, limit: number): TopCountry[] {
-  if (!details) {
-    return [];
-  }
-  const candidates = [
-    "top_countries",
-    "countries",
-    "country_codes",
-    "available_countries",
-    "supported_countries",
-  ];
-  for (const key of candidates) {
-    const value = details[key];
-    if (!Array.isArray(value)) {
-      continue;
-    }
-    const parsed = value
-      .map((entry) => {
-        if (typeof entry === "string") {
-          const country = entry.trim().toUpperCase();
-          return country
-            ? ({ country, downloadsEstimate: null, revenueEstimate: null } satisfies TopCountry)
-            : null;
-        }
-        const record = asRecord(entry);
-        if (!record) {
-          return null;
-        }
-        const country = readString(record, ["country", "country_code", "code", "name"])
-          ?.trim()
-          .toUpperCase();
-        if (!country) {
-          return null;
-        }
-        return {
-          country,
-          downloadsEstimate: readNumber(record, ["downloads", "units"]) ?? null,
-          revenueEstimate: readNumber(record, ["revenue"]) ?? null,
-        } satisfies TopCountry;
-      })
-      .filter((entry): entry is TopCountry => Boolean(entry))
-      .slice(0, limit);
-    if (parsed.length > 0) {
-      return parsed;
-    }
-  }
-  return [];
 }
 
 function resolveLastMonthMetrics(rows: SalesRow[]): {
@@ -539,7 +506,7 @@ function selectBestSearchResult(
       const score = name ? scoreNameMatch(query, name) : 0;
       return { result, score };
     })
-    .sort((a, b) => b.score - a.score);
+    .toSorted((a, b) => b.score - a.score);
 
   const best = ranked[0];
   if (!best) {
@@ -552,48 +519,149 @@ function selectBestSearchResult(
   };
 }
 
+function readIdentifierInputs(params: Record<string, unknown>): {
+  safeParams: JsonRecord;
+  unifiedAppIdInput: string | undefined;
+  appIdInput: string | undefined;
+  appQuery: string | undefined;
+} {
+  const safeParams = asRecord(params) ?? {};
+  const unifiedAppIdInput =
+    readStringParam(params, "unified_app_id") ??
+    readInputStringParam(safeParams, ["unified_app_id", "unifiedAppId", "unified_id"]);
+  const appIdInput =
+    readStringParam(params, "app_id") ??
+    readInputStringParam(safeParams, [
+      "app_id",
+      "appId",
+      "ios_app_id",
+      "android_app_id",
+      "bundle_id",
+      "package_name",
+      "id",
+    ]);
+  const rawAppQuery = readStringParam(params, "app_query") ?? readBestEffortAppQuery(safeParams);
+  const inferredAppIdFromQuery =
+    !appIdInput && rawAppQuery && isLikelyAndroidPackageId(rawAppQuery)
+      ? rawAppQuery.trim()
+      : undefined;
+  return {
+    safeParams,
+    unifiedAppIdInput,
+    appIdInput: appIdInput ?? inferredAppIdFromQuery,
+    appQuery: inferredAppIdFromQuery ? undefined : rawAppQuery,
+  };
+}
+
+type QueryCandidate = {
+  rank: number;
+  unifiedAppId: string;
+  name: string | null;
+  score: number;
+};
+
+type QueryResolution = {
+  appNameFromSearch?: string;
+  queryResolutionNote?: string;
+};
+
+async function listQueryCandidates(
+  client: SensorTowerClient,
+  appQuery: string | undefined,
+  limit: number,
+): Promise<QueryCandidate[]> {
+  const queryText = appQuery ?? "";
+  const searchResults = await client.searchUnifiedApps(queryText, SEARCH_RESULTS_LIMIT);
+  if (searchResults.length === 0) {
+    return [];
+  }
+  const ranked = searchResults
+    .map((result) => {
+      const name = result.name?.trim();
+      const score = name ? scoreNameMatch(queryText, name) : 0;
+      return { result, score };
+    })
+    .toSorted((a, b) => b.score - a.score)
+    .slice(0, Math.max(1, Math.min(SEARCH_RESULTS_LIMIT, limit)));
+
+  return ranked.map((entry, index) => ({
+    rank: index + 1,
+    unifiedAppId: entry.result.unifiedAppId,
+    name: entry.result.name ?? null,
+    score: Number(entry.score.toFixed(4)),
+  }));
+}
+
+async function resolveUnifiedFromQuery(
+  client: SensorTowerClient,
+  appQuery: string | undefined,
+): Promise<{ unifiedAppId: string } & QueryResolution> {
+  const queryText = appQuery ?? "";
+  const searchResults = await client.searchUnifiedApps(queryText, SEARCH_RESULTS_LIMIT);
+  const resolved = selectBestSearchResult(queryText, searchResults);
+  if (!resolved) {
+    throw new Error(`No Sensor Tower app found for query: ${appQuery}`);
+  }
+  if (resolved.score < MIN_QUERY_MATCH_SCORE) {
+    throw new Error(
+      `No confident Sensor Tower app match for query "${queryText}". Top candidates: ${resolved.candidates.join(", ")}`,
+    );
+  }
+  return {
+    unifiedAppId: resolved.result.unifiedAppId,
+    appNameFromSearch: resolved.result.name,
+    queryResolutionNote:
+      resolved.result.name && resolved.score < 0.75
+        ? `Query "${queryText}" weakly matched "${resolved.result.name}" (score ${resolved.score.toFixed(2)}). Verify before relying on this result.`
+        : undefined,
+  };
+}
+
 export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
   return {
     name: "sensortower_app_snapshot",
     description:
-      "Generates a Sensor Tower app snapshot by aggregating metadata from `/v1/{os}/apps` and performance metrics from `/v1/{os}/sales_report_estimates`. Returns overall revenue, RDP, last-month downloads, metadata text, top countries, and languages. Requires one app identifier: app_query/query, app_id, or unified_app_id.",
+      "Sensor Tower metadata tool. Returns ONE app's metadata from `/v1/{os}/apps`: appName, subtitleOrShortDescription, longDescription, languages. Inputs: app_id (literal iOS numeric ID or Android package), unified_app_id (24-char hex), or app_query/query (name search). Candidate mode: set return_candidates=true with app_query/query and no IDs to return ranked candidates (no metadata fetch), then call again with chosen unified_app_id/app_id. If app_id is provided, it is treated as a literal ID (not a name search).",
     parameters: Type.Object({
       app_query: Type.Optional(
         Type.String({
           description:
-            "App search query if unified_app_id/app_id is not provided. This is the preferred input for names.",
+            "App name/search text. Preferred when you do not have an ID and when the input is a name.",
         }),
       ),
       query: Type.Optional(
         Type.String({
-          description: "Alias for app_query.",
+          description: "Alias for app_query (same behavior).",
         }),
       ),
       unified_app_id: Type.Optional(
         Type.String({
-          description: "Sensor Tower unified app id (24-char hex).",
+          description: "Sensor Tower unified app ID (24-char hex).",
         }),
       ),
       app_id: Type.Optional(
         Type.String({
-          description: "Platform app id (iOS numeric id or Android package name).",
+          description:
+            "Literal platform app ID only (iOS numeric ID or Android package). Do not pass human app names here.",
         }),
       ),
-      month: Type.Optional(
-        Type.String({
-          description: "Month in YYYY-MM. Defaults to previous calendar month (UTC).",
+      return_candidates: Type.Optional(
+        Type.Boolean({
+          description:
+            "If true and app_query/query is provided (without IDs), return candidate list only. No metadata call is made.",
+        }),
+      ),
+      candidates_limit: Type.Optional(
+        Type.Number({
+          minimum: 1,
+          maximum: SEARCH_RESULTS_LIMIT,
+          description: "Candidate count in candidate mode (default 5, max 10).",
         }),
       ),
       metadata_os: Type.Optional(
         stringEnum(["unified", "ios", "android"], {
-          description: "OS namespace for app details lookup. Defaults to plugin config value.",
-        }),
-      ),
-      top_countries_limit: Type.Optional(
-        Type.Number({
-          minimum: 1,
-          maximum: 25,
-          description: "Max countries in top_countries output (default 10).",
+          description:
+            "OS namespace for metadata lookup. Defaults to plugin config. If unified is unresolved, tool may resolve to ios/android for richer metadata.",
         }),
       ),
     }),
@@ -607,30 +675,9 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
           );
         }
 
-        const safeParams = asRecord(params) ?? {};
-        const unifiedAppIdInput =
-          readStringParam(params, "unified_app_id") ??
-          readInputStringParam(safeParams, ["unified_app_id", "unifiedAppId", "unified_id"]);
-        const appIdInput =
-          readStringParam(params, "app_id") ??
-          readInputStringParam(safeParams, [
-            "app_id",
-            "appId",
-            "ios_app_id",
-            "android_app_id",
-            "bundle_id",
-            "package_name",
-            "id",
-          ]);
-        const rawAppQuery = readStringParam(params, "app_query") ?? readBestEffortAppQuery(safeParams);
-        const inferredAppIdFromQuery =
-          !appIdInput && rawAppQuery && isLikelyAndroidPackageId(rawAppQuery)
-            ? rawAppQuery.trim()
-            : undefined;
-        const effectiveAppIdInput = appIdInput ?? inferredAppIdFromQuery;
-        const appQuery = inferredAppIdFromQuery ? undefined : rawAppQuery;
+        const { safeParams, unifiedAppIdInput, appIdInput, appQuery } = readIdentifierInputs(params);
 
-        if (!unifiedAppIdInput && !effectiveAppIdInput && !appQuery) {
+        if (!unifiedAppIdInput && !appIdInput && !appQuery) {
           return jsonResult({
             ok: false,
             error: "Missing app identifier. Provide unified_app_id, app_id, or app_query.",
@@ -641,18 +688,13 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
               "query",
               "app_id",
               "unified_app_id",
+              "return_candidates",
+              "candidates_limit",
               "metadata_os",
-              "month",
-              "top_countries_limit",
             ],
           });
         }
-        if (
-          unifiedAppIdInput &&
-          !isUnifiedAppId(unifiedAppIdInput) &&
-          !effectiveAppIdInput &&
-          !appQuery
-        ) {
+        if (unifiedAppIdInput && !isUnifiedAppId(unifiedAppIdInput) && !appIdInput && !appQuery) {
           throw new Error("unified_app_id must be a 24-char hex string.");
         }
 
@@ -660,33 +702,53 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
           readInputStringParam(safeParams, ["metadata_os", "metadataOs", "os"])) as
           | SensorTowerMetadataOs
           | undefined;
-        const monthWindow = resolveMonthWindow(
-          readStringParam(params, "month") ?? readInputStringParam(safeParams, ["month"]),
-        );
-        const topCountriesLimit =
-          readNumberParam(params, "top_countries_limit", { integer: true }) ??
-          readInputNumberParam(safeParams, ["top_countries_limit", "topCountriesLimit"]) ??
-          config.defaultTopCountriesLimit;
-        const normalizedTopCountriesLimit = Math.max(
+        const returnCandidates =
+          parseBoolean(params.return_candidates) ??
+          readInputBooleanParam(safeParams, ["return_candidates", "returnCandidates"]) ??
+          false;
+        const candidatesLimitRaw =
+          readNumberParam(params, "candidates_limit", { integer: true }) ??
+          readInputNumberParam(safeParams, ["candidates_limit", "candidatesLimit"]) ??
+          DEFAULT_CANDIDATES_LIMIT;
+        const candidatesLimit = Math.max(
           1,
-          Math.min(25, Math.floor(topCountriesLimit)),
+          Math.min(SEARCH_RESULTS_LIMIT, Math.floor(candidatesLimitRaw)),
         );
 
         const client = new SensorTowerClient(config);
+        if (returnCandidates && appQuery && !appIdInput && !unifiedAppIdInput) {
+          const candidates = await listQueryCandidates(client, appQuery, candidatesLimit);
+          if (candidates.length === 0) {
+            return jsonResult({
+              ok: false,
+              error: `No Sensor Tower app found for query: ${appQuery}`,
+            });
+          }
+          return jsonResult({
+            mode: "candidates",
+            query: appQuery,
+            candidates,
+            nextStep:
+              "Choose one candidate and call sensortower_app_snapshot with unified_app_id (or resolved app_id) to fetch metadata.",
+            notes: [
+              "Candidate mode is intended for LLM orchestration before selecting one app.",
+              "No metadata fetch is performed in candidate mode.",
+            ],
+          });
+        }
 
         let unifiedAppId = unifiedAppIdInput?.toLowerCase();
         let appId = unifiedAppId;
-        let salesOs: SensorTowerMetadataOs = "unified";
         let detailsOs: SensorTowerMetadataOs = metadataOsInput ?? config.defaultMetadataOs;
         let appNameFromSearch: string | undefined;
         let queryResolutionNote: string | undefined;
-        // The platform-specific app ID used for metadata (may differ from appId
-        // which is used for sales). When we have a unified ID we resolve to a
-        // platform ID so we can call `/v1/{ios|android}/apps` for rich metadata.
+        // The platform-specific app ID used for metadata. When we have a unified
+        // ID we resolve to a platform ID so we can call `/v1/{ios|android}/apps`
+        // for rich metadata.
         let detailsAppId: string | undefined;
 
-        if (effectiveAppIdInput) {
-          appId = effectiveAppIdInput.trim();
+        if (appIdInput) {
+          appId = appIdInput.trim();
           const inferredOs = inferOsFromAppId(appId);
           if (!metadataOsInput) {
             if (config.defaultMetadataOs === "unified") {
@@ -698,31 +760,16 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
           if (detailsOs === "unified") {
             detailsOs = inferredOs ?? "ios";
           }
-          salesOs = detailsOs;
           detailsAppId = appId;
           unifiedAppId = null;
         } else if (!unifiedAppId) {
-          const queryText = appQuery ?? "";
-          const searchResults = await client.searchUnifiedApps(queryText, SEARCH_RESULTS_LIMIT);
-          const resolved = selectBestSearchResult(queryText, searchResults);
-          if (!resolved) {
-            throw new Error(`No Sensor Tower app found for query: ${appQuery}`);
-          }
-          if (resolved.score < MIN_QUERY_MATCH_SCORE) {
-            throw new Error(
-              `No confident Sensor Tower app match for query "${queryText}". Top candidates: ${resolved.candidates.join(", ")}`,
-            );
-          }
-          unifiedAppId = resolved.result.unifiedAppId;
+          const resolved = await resolveUnifiedFromQuery(client, appQuery);
+          unifiedAppId = resolved.unifiedAppId;
           appId = unifiedAppId;
-          appNameFromSearch = resolved.result.name;
-          if (resolved.result.name && resolved.score < 0.75) {
-            queryResolutionNote = `Query "${queryText}" weakly matched "${resolved.result.name}" (score ${resolved.score.toFixed(2)}). Verify before relying on this snapshot.`;
-          }
-          salesOs = "unified";
+          appNameFromSearch = resolved.appNameFromSearch;
+          queryResolutionNote = resolved.queryResolutionNote;
         } else {
           appId = unifiedAppId;
-          salesOs = "unified";
         }
 
         if (!appId) {
@@ -773,15 +820,228 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
               : null;
         }
 
-        const releaseDate = parseReleaseDate(details) ?? config.allTimeFallbackStartDate;
-        const today = toIsoDateUtc(new Date());
+        const subtitleOrShortDescription = readString(details, ["subtitle", "short_description"]);
+        const longDescription = readString(details, ["description"]);
+        const appName =
+          readString(details, ["name", "app_name", "title"]) ?? appNameFromSearch ?? null;
+        const languages = unique(extractLanguages(details));
 
-        const [allTimeSalesRaw, monthSalesRaw] = await Promise.all([
+        return jsonResult({
+          unifiedAppId,
+          appId: detailsAppId,
+          appOs: detailsOs,
+          appName,
+          metadata: {
+            subtitleOrShortDescription,
+            longDescription,
+            languages,
+          },
+          sources: {
+            searchEndpoint: config.endpoints.searchEntities,
+            detailsEndpoint: config.endpoints.appDetails,
+          },
+          notes: [
+            "All values are Sensor Tower estimates.",
+            "Plugin enforces request pacing via requestsPerMinute (default 6).",
+            "Default auth mode is query token to match Sensor Tower API examples.",
+            ...(queryResolutionNote ? [queryResolutionNote] : []),
+          ],
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResult({ ok: false, error: message });
+      }
+    },
+  };
+}
+
+export function createSensorTowerAppSalesDownloadsTool(api: OpenClawPluginApi) {
+  return {
+    name: "sensortower_app_sales_downloads",
+    description:
+      "Sensor Tower sales/download estimates tool. Returns ONE app's monthly estimates from `/v1/{os}/sales_report_estimates`: metrics.worldwide (downloadsEstimate, revenueEstimate) and metrics.lastMonth (downloadsEstimate, revenueEstimate, topCountriesByDownloads with downloadsEstimate + revenueEstimate). Inputs: app_id (literal iOS numeric ID or Android package), unified_app_id, or app_query/query. Candidate mode: set return_candidates=true with app_query/query and no IDs to return ranked candidates only (no sales fetch), then call again with chosen unified_app_id/app_id.",
+    parameters: Type.Object({
+      app_query: Type.Optional(
+        Type.String({
+          description:
+            "App name/search text. Preferred when you do not have an ID and when the input is a name.",
+        }),
+      ),
+      query: Type.Optional(
+        Type.String({
+          description: "Alias for app_query (same behavior).",
+        }),
+      ),
+      unified_app_id: Type.Optional(
+        Type.String({
+          description: "Sensor Tower unified app ID (24-char hex).",
+        }),
+      ),
+      app_id: Type.Optional(
+        Type.String({
+          description:
+            "Literal platform app ID only (iOS numeric ID or Android package). Do not pass human app names here.",
+        }),
+      ),
+      return_candidates: Type.Optional(
+        Type.Boolean({
+          description:
+            "If true and app_query/query is provided (without IDs), return candidate list only. No sales call is made.",
+        }),
+      ),
+      candidates_limit: Type.Optional(
+        Type.Number({
+          minimum: 1,
+          maximum: SEARCH_RESULTS_LIMIT,
+          description: "Candidate count in candidate mode (default 5, max 10).",
+        }),
+      ),
+      month: Type.Optional(
+        Type.String({
+          description: "Month in YYYY-MM. Defaults to previous calendar month (UTC).",
+        }),
+      ),
+      sales_os: Type.Optional(
+        stringEnum(["unified", "ios", "android"], {
+          description:
+            "OS namespace for sales lookup. Defaults to inferred OS when app_id is provided, otherwise unified.",
+        }),
+      ),
+      top_countries_limit: Type.Optional(
+        Type.Number({
+          minimum: 1,
+          maximum: 25,
+          description: "Max countries in top_countries output (default 10).",
+        }),
+      ),
+    }),
+
+    async execute(_id: string, params: Record<string, unknown>) {
+      try {
+        const config = resolveSensorTowerConfig(api.pluginConfig);
+        if (!config.authToken) {
+          throw new Error(
+            "Sensor Tower auth token missing. Set plugins.entries.sensortower-aso.config.authToken or SENSORTOWER_AUTH_TOKEN.",
+          );
+        }
+
+        const { safeParams, unifiedAppIdInput, appIdInput, appQuery } = readIdentifierInputs(params);
+        if (!unifiedAppIdInput && !appIdInput && !appQuery) {
+          return jsonResult({
+            ok: false,
+            error: "Missing app identifier. Provide unified_app_id, app_id, or app_query.",
+            retryHint:
+              'Retry with at least one field, e.g. {"app_query":"AiRide"} or {"app_id":"com.aimarket.ai_ride"}.',
+            acceptedKeys: [
+              "app_query",
+              "query",
+              "app_id",
+              "unified_app_id",
+              "return_candidates",
+              "candidates_limit",
+              "month",
+              "sales_os",
+              "top_countries_limit",
+            ],
+          });
+        }
+        if (unifiedAppIdInput && !isUnifiedAppId(unifiedAppIdInput) && !appIdInput && !appQuery) {
+          throw new Error("unified_app_id must be a 24-char hex string.");
+        }
+
+        const monthWindow = resolveMonthWindow(
+          readStringParam(params, "month") ?? readInputStringParam(safeParams, ["month"]),
+        );
+        const requestedSalesOs = (readStringParam(params, "sales_os") ??
+          readInputStringParam(safeParams, ["sales_os", "salesOs", "os"])) as
+          | SensorTowerMetadataOs
+          | undefined;
+        const returnCandidates =
+          parseBoolean(params.return_candidates) ??
+          readInputBooleanParam(safeParams, ["return_candidates", "returnCandidates"]) ??
+          false;
+        const candidatesLimitRaw =
+          readNumberParam(params, "candidates_limit", { integer: true }) ??
+          readInputNumberParam(safeParams, ["candidates_limit", "candidatesLimit"]) ??
+          DEFAULT_CANDIDATES_LIMIT;
+        const candidatesLimit = Math.max(
+          1,
+          Math.min(SEARCH_RESULTS_LIMIT, Math.floor(candidatesLimitRaw)),
+        );
+        const topCountriesLimit =
+          readNumberParam(params, "top_countries_limit", { integer: true }) ??
+          readInputNumberParam(safeParams, ["top_countries_limit", "topCountriesLimit"]) ??
+          config.defaultTopCountriesLimit;
+        const normalizedTopCountriesLimit = Math.max(1, Math.min(25, Math.floor(topCountriesLimit)));
+
+        const client = new SensorTowerClient(config);
+        if (returnCandidates && appQuery && !appIdInput && !unifiedAppIdInput) {
+          const candidates = await listQueryCandidates(client, appQuery, candidatesLimit);
+          if (candidates.length === 0) {
+            return jsonResult({
+              ok: false,
+              error: `No Sensor Tower app found for query: ${appQuery}`,
+            });
+          }
+          return jsonResult({
+            mode: "candidates",
+            query: appQuery,
+            candidates,
+            nextStep:
+              "Choose one candidate and call sensortower_app_sales_downloads with unified_app_id (or resolved app_id) to fetch sales/download estimates.",
+            notes: [
+              "Candidate mode is intended for LLM orchestration before selecting one app.",
+              "No sales/download fetch is performed in candidate mode.",
+            ],
+          });
+        }
+
+        let unifiedAppId = unifiedAppIdInput?.toLowerCase() ?? null;
+        let appId = unifiedAppId;
+        let salesOs: SensorTowerMetadataOs = requestedSalesOs ?? "unified";
+        let appNameFromSearch: string | undefined;
+        let queryResolutionNote: string | undefined;
+
+        if (appIdInput) {
+          appId = appIdInput.trim();
+          const inferredOs = inferOsFromAppId(appId);
+          salesOs = requestedSalesOs ?? inferredOs ?? "unified";
+          unifiedAppId = isUnifiedAppId(appId) ? appId.toLowerCase() : null;
+        } else if (!unifiedAppId) {
+          const resolved = await resolveUnifiedFromQuery(client, appQuery);
+          unifiedAppId = resolved.unifiedAppId;
+          appId = unifiedAppId;
+          appNameFromSearch = resolved.appNameFromSearch;
+          queryResolutionNote = resolved.queryResolutionNote;
+          salesOs = requestedSalesOs ?? "unified";
+        } else {
+          appId = unifiedAppId;
+          salesOs = requestedSalesOs ?? "unified";
+        }
+
+        if (!appId) {
+          throw new Error("Unable to resolve app id.");
+        }
+
+        if (unifiedAppId && salesOs !== "unified") {
+          const resolvedIds = await client.resolveUnifiedAppIds(unifiedAppId);
+          if (salesOs === "ios" && resolvedIds.iosAppId) {
+            appId = resolvedIds.iosAppId;
+          } else if (salesOs === "android" && resolvedIds.androidAppId) {
+            appId = resolvedIds.androidAppId;
+          } else {
+            throw new Error(
+              `Unable to resolve ${salesOs} app id from unified_app_id ${unifiedAppId}. Retry with app_id or set sales_os to unified.`,
+            );
+          }
+        }
+
+        const [worldwideRaw, monthByCountryRaw] = await Promise.all([
           client.getSalesRows({
             appId,
             os: salesOs,
-            startDate: releaseDate,
-            endDate: today,
+            startDate: monthWindow.startDate,
+            endDate: monthWindow.endDate,
             dateGranularity: "monthly",
             countries: config.defaultCountry,
           }),
@@ -794,50 +1054,25 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
           }),
         ]);
 
-        const allTimeSales = parseSalesRows(allTimeSalesRaw);
-        const monthSales = parseSalesRows(monthSalesRaw);
-
-        const overallRevenue = sumNumbersOrNull(allTimeSales.map((row) => row.revenue));
-        const overallDownloads = sumNumbersOrNull(allTimeSales.map((row) => row.downloads));
-        const overallRdp =
-          typeof overallRevenue === "number" &&
-          typeof overallDownloads === "number" &&
-          overallDownloads > 0
-            ? overallRevenue / overallDownloads
-            : null;
-
-        const monthMetrics = resolveLastMonthMetrics(monthSales);
-        const salesTopCountries = buildTopCountries(
+        const worldwideRows = parseSalesRows(worldwideRaw);
+        const byCountryRows = parseSalesRows(monthByCountryRaw);
+        const worldwideMetrics = resolveLastMonthMetrics(worldwideRows);
+        const monthMetrics = resolveLastMonthMetrics(byCountryRows);
+        const topCountries = buildTopCountries(
           monthMetrics.rowsForTopCountries,
           normalizedTopCountriesLimit,
         );
-        const topCountries =
-          salesTopCountries.length > 0
-            ? salesTopCountries
-            : extractTopCountriesFromDetails(details, normalizedTopCountriesLimit);
-
-        const subtitleOrShortDescription = readString(details, ["subtitle", "short_description"]);
-        const longDescription = readString(details, ["description"]);
-        const appName =
-          readString(details, ["name", "app_name", "title"]) ?? appNameFromSearch ?? null;
-        const languages = unique(extractLanguages(details));
 
         return jsonResult({
           unifiedAppId,
           appId,
           appOs: salesOs,
-          appName,
+          appName: appNameFromSearch ?? null,
           month: monthWindow.month,
-          metadata: {
-            subtitleOrShortDescription,
-            longDescription,
-            languages,
-          },
           metrics: {
-            overall: {
-              revenueWwEstimate: overallRevenue,
-              downloadsWwEstimate: overallDownloads,
-              rdpWwEstimate: overallRdp,
+            worldwide: {
+              downloadsEstimate: worldwideMetrics.downloadsEstimate,
+              revenueEstimate: worldwideMetrics.revenueEstimate,
             },
             lastMonth: {
               startDate: monthWindow.startDate,
@@ -849,14 +1084,12 @@ export function createSensorTowerAppSnapshotTool(api: OpenClawPluginApi) {
           },
           sources: {
             searchEndpoint: config.endpoints.searchEntities,
-            detailsEndpoint: config.endpoints.appDetails,
             salesEndpoint: config.endpoints.salesReport,
           },
           notes: [
             "All values are Sensor Tower estimates.",
             "Plugin enforces request pacing via requestsPerMinute (default 6).",
             "Default auth mode is query token to match Sensor Tower API examples.",
-            "If top countries are absent in sales response, the plugin falls back to metadata fields when available.",
             ...(queryResolutionNote ? [queryResolutionNote] : []),
           ],
         });
